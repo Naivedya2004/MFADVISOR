@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/firebaseConfig'; // Assuming you export 'auth' from this file
 import { User } from 'firebase/auth';
 
@@ -22,7 +22,7 @@ export default function RootLayout() {
     return null;
   }
 
-  const [user, setUser] = useState<User | null>(null); // Placeholder for user
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     // Replace with your actual authentication state logic (e.g., Firebase onAuthStateChanged)
