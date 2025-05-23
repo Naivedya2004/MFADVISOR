@@ -1,36 +1,50 @@
-// import firebaseApp from './firebaseConfig';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import firebaseApp from './firebaseConfig'; // Assuming firebaseConfig.ts is in the same directory
-const auth = getAuth(firebaseApp as any);
-export { auth };
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut
+} from 'firebase/auth';
+
+import { auth, app as firebaseApp } from '../firebaseConfig';
 
 export const signUp = async (email: string, password: string) => {
   try {
+    if (!email.includes('@')) throw new Error("Invalid email address.");
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    // Signed up
     const user = userCredential.user;
     console.log("User signed up:", user);
-    // ... (you might want to store user data in Firestore here)
-    return user;
+
+    // You may store user data in Firestore here...
+
+    return { user, success: true };
   } catch (error: any) {
-    const errorCode = error.code;
-    const errorMessage = error.message;
-    console.error("Error signing up:", errorCode, errorMessage);
-    throw error; // Re-throw the error for handling in the component
+    console.error("Error signing up:", error.code, error.message);
+    throw error;
   }
 };
 
 export const signIn = async (email: string, password: string) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    // Signed in
     const user = userCredential.user;
     console.log("User signed in:", user);
-    return user;
+    return { user, success: true };
   } catch (error: any) {
-    const errorCode = error.code;
-    const errorMessage = error.message;
-    console.error("Error signing in:", errorCode, errorMessage);
-    throw error; // Re-throw the error for handling in the component
+    console.error("Error signing in:", error.code, error.message);
+    throw error;
   }
 };
+
+export const signOutUser = async () => {
+  try {
+    await signOut(auth);
+    console.log("User signed out successfully");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error signing out:", error.code, error.message);
+    throw error;
+  }
+};
+
+// Export firebase instances
+export { auth, firebaseApp };

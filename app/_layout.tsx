@@ -6,7 +6,7 @@ import 'react-native-reanimated';
 
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/utils/firebaseAuth'; // Assuming you export 'auth' from this file
+import { auth } from '@/firebaseConfig'; // Assuming you export 'auth' from this file
 import { User } from 'firebase/auth';
 
 import { useColorScheme } from '@/hooks/useColorScheme';

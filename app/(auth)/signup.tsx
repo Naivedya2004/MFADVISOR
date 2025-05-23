@@ -4,9 +4,7 @@ import { Link, useRouter } from 'expo-router';
 
 // Assuming StyledTextInput is a custom component
 import { signUp } from '@/utils/firebaseAuth';
-
-// const StyledView = styled(View);
-export default function SignUpScreen() {
+export default function SignUpScreen() { 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   // const router = useRouter(); // Not needed with Link component
@@ -32,7 +30,7 @@ export default function SignUpScreen() {
         onChangeText={setEmail}
       />
 
-      <StyledTextInput
+      <TextInput
         className="w-full border border-gray-300 rounded-md p-2 mb-4"
         placeholder="Password"      
         secureTextEntry
