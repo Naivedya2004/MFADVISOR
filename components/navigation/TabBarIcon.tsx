@@ -1,20 +1,25 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
 
-interface TabBarIconProps {
-  name: string;
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+type TabBarIconProps = {
+  name: IoniconName; // ✅ Type-safe for Ionicons only
   color: string;
   focused: boolean;
-}
-
-const TabBarIcon: React.FC<TabBarIconProps> = ({ name, color, focused }) => {
-  // You can replace this Text component with an actual icon component
-  // from a library like @expo/vector-icons, react-native-vector-icons, etc.
-  return (
-    <Text style={{ color: color, fontWeight: focused ? 'bold' : 'normal' }}>
-      {name}
-    </Text>
-  );
 };
 
-export default TabBarIcon;
+export default function TabBarIcon({ name, color, focused }: TabBarIconProps) {
+  return (
+    <Ionicons
+      name={name}
+      size={26}
+      color={color}
+      style={{
+        opacity: focused ? 1 : 0.6,
+        transform: [{ scale: focused ? 1.1 : 1 }],
+      }}
+    />
+  );
+}
