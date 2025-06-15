@@ -1,9 +1,9 @@
-import { StyleSheet, ActivityIndicator, FlatList, Button, View, Text, Alert, Dimensions, TouchableOpacity } from 'react-native'; // Import Dimensions and TouchableOpacity
-import { useEffect, useState } from 'react';
-import { PieChart } from 'react-native-chart-kit';
-import { getFirestore, collection, query, addDoc, doc, updateDoc, deleteDoc, Firestore, onSnapshot, QuerySnapshot, QueryDocumentSnapshot, FirestoreError } from 'firebase/firestore'; // Import doc, updateDoc, deleteDoc, Firestore, onSnapshot and types
 import ManagePortfolioItemModal from '@/components/ManagePortfolioItemModal';
 import { auth, signOutUser } from '@/utils/firebaseAuth'; // ✅ single correct import
+import { addDoc, collection, deleteDoc, doc, Firestore, getFirestore, onSnapshot, query, QuerySnapshot, updateDoc } from 'firebase/firestore'; // Import doc, updateDoc, deleteDoc, Firestore, onSnapshot and types
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Button, Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // Import Dimensions and TouchableOpacity
+import { PieChart } from 'react-native-chart-kit';
 
 // 💡 Portfolio data interface
 interface PortfolioItem {

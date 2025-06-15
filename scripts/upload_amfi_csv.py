@@ -1,12 +1,13 @@
 import psycopg2
 import csv
+import os
 
 # Update these with your actual connection details
 DB_HOST = "localhost"
 DB_NAME = "Mutualfundadvisor"
-DB_USER = "Naivedya"
+DB_USER = "postgres"
 DB_PASSWORD = "Naivedya2004@"  # <-- Replace with your actual password
-CSV_PATH = "scripts/amfi_fund_list.csv"
+CSV_PATH = "amfi_fund_list.csv"  # Updated path since we're already in the scripts directory
 
 conn = psycopg2.connect(
     host=DB_HOST,

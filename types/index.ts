@@ -1,6 +1,8 @@
 export interface PortfolioItem {
   id: string;
   fundId: string;
-  investedAmount: number;
   units: number;
+  investedAmount: number;
+  purchaseDate: string;
+  notes?: string;
 }

@@ -1,4 +1,5 @@
 import { PortfolioItem } from '@/types'; // Ensure PortfolioItem is imported from your types file
+import { PY_API_URL } from '@/utils/api';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Button, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 
@@ -73,7 +74,7 @@ const ManagePortfolioItemModal: React.FC<ManagePortfolioItemModalProps> = ({
     setLoadingSuggestions(true);
     setShowSuggestions(true);
     try {
-      const response = await fetch(`http://localhost:8000/normalize?input=${encodeURIComponent(input)}`);
+      const response = await fetch(`${PY_API_URL}/normalize?input=${encodeURIComponent(input)}`);
       const data = await response.json();
       if (data && data.matched_name) {
         const newSuggestions = [

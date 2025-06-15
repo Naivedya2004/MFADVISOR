@@ -9,6 +9,7 @@ import { PieChart } from 'react-native-chart-kit';
 
 
 export default function PortfolioScreen() {
+  console.log("Rendering PortfolioScreen");
   // Destructure fundDetails instead of fundNavs
   const { portfolio, loading, error, fundDetails, navLoading, addPortfolioItem, updatePortfolioItem, deletePortfolioItem } = usePortfolio();
   const [modalVisible, setModalVisible] = useState(false);
@@ -122,6 +123,7 @@ export default function PortfolioScreen() {
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
+        <Text>Debug: PortfolioScreen is rendering</Text>
         <Text style={styles.title}>Portfolio Overview</Text>
         <Button title="Add Portfolio Item" onPress={handleAdd} />
 
