@@ -11,7 +11,7 @@ import { PieChart } from 'react-native-chart-kit';
 export default function PortfolioScreen() {
   console.log("Rendering PortfolioScreen");
   // Destructure fundDetails instead of fundNavs
-  const { portfolio, loading, error, fundDetails, navLoading, addPortfolioItem, updatePortfolioItem, deletePortfolioItem } = usePortfolio();
+  const { portfolio, loading, error, addPortfolioItem, updatePortfolioItem, deletePortfolioItem } = usePortfolio();
   const [modalVisible, setModalVisible] = useState(false);
   const [itemToEdit, setItemToEdit] = useState<PortfolioItem | null>(null);
 
@@ -23,31 +23,20 @@ export default function PortfolioScreen() {
     const calculatedSectorDistribution: { [sector: string]: number } = {};
 
     portfolio.forEach(item => {
-      // Get NAV and category from fundDetails
-      const fundDetail = fundDetails[item.fundId];
-      const latestNav = fundDetail?.nav;
-      const category = fundDetail?.category;
-      
-      const currentValue = latestNav ? item.units * latestNav : 0; // Use 0 if NAV not available
-      
-      calculatedTotalValue += currentValue;
-      calculatedTotalInvested += item.investedAmount;
-
-      // Fund allocation
+      // TODO: Add NAV/category analytics from backend in future
+      calculatedTotalValue += item.invested_amount;
+      calculatedTotalInvested += item.invested_amount;
       calculatedFundAllocationData.push({
-        name: `${item.fundId}`, // Display AMFI code for now, can fetch name later
-        value: currentValue,
+        name: `${item.fund_id}`,
+        value: item.invested_amount,
       });
-
-      // Sector distribution: Use the actual category from MFAPI
-      const sector = category || 'Uncategorized'; // Default to 'Uncategorized' if category not available
+      const sector = 'Uncategorized';
       if (calculatedSectorDistribution[sector]) {
-        calculatedSectorDistribution[sector] += currentValue;
+        calculatedSectorDistribution[sector] += item.invested_amount;
       } else {
-        calculatedSectorDistribution[sector] = currentValue;
+        calculatedSectorDistribution[sector] = item.invested_amount;
       }
     });
-
     const calculatedOverallGainLoss = calculatedTotalValue - calculatedTotalInvested;
 
     return {
@@ -60,7 +49,7 @@ export default function PortfolioScreen() {
         value: calculatedSectorDistribution[sector],
       })),
     };
-  }, [portfolio, fundDetails]); // Recalculate when portfolio or fundDetails change
+  }, [portfolio]);
 
   // --- Portfolio item management handlers ---
   const handleAdd = () => {
@@ -73,7 +62,7 @@ export default function PortfolioScreen() {
   };
   const handleSaveItem = async (item: Partial<PortfolioItem>) => {
     try {
-      if (item.id) {
+      if (item.id !== undefined && item.id !== null) {
         await updatePortfolioItem(item as PortfolioItem);
         Alert.alert("Success", "Portfolio item updated!");
       } else {
@@ -88,7 +77,7 @@ export default function PortfolioScreen() {
       setItemToEdit(null);
     }
   };
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     Alert.alert(
       "Confirm Delete",
       "Are you sure you want to delete this portfolio item?",
@@ -128,7 +117,7 @@ export default function PortfolioScreen() {
         <Button title="Add Portfolio Item" onPress={handleAdd} />
 
         {/* --- Analytics Summary --- */}
-        {(loading || navLoading) && <ActivityIndicator size="large" color="#007AFF" style={styles.activityIndicator} />}
+        {(loading) && <ActivityIndicator size="large" color="#007AFF" style={styles.activityIndicator} />}
         {error && <Text style={styles.error}>{error}</Text>}
         
         {!loading && !error && (
@@ -191,23 +180,19 @@ export default function PortfolioScreen() {
             <Text style={styles.sectionTitle}>Your Holdings</Text>
             <FlatList
               data={portfolio}
-              keyExtractor={item => item.id}
+              keyExtractor={item => item.id.toString()}
               renderItem={({ item }) => {
-                // Get NAV and category from fundDetails
-                const fundDetail = fundDetails[item.fundId];
-                const latestNav = fundDetail?.nav;
-                const currentValue = latestNav ? item.units * latestNav : 0;
-                const itemGainLoss = currentValue - item.investedAmount;
-                const isPositiveGain = itemGainLoss >= 0;
+                // TODO: Add NAV/category analytics from backend in future
+                const currentValue = item.invested_amount;
+                const itemGainLoss = 0;
+                const isPositiveGain = true;
 
                 return (
                   <View style={styles.item}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.itemText}>Fund Code: {item.fundId}</Text>
-                      {fundDetail?.category && <Text style={styles.itemText}>Category: {fundDetail.category}</Text>}
-                      <Text style={styles.itemText}>Invested: ₹{item.investedAmount.toFixed(2)}</Text>
+                      <Text style={styles.itemText}>Fund Code: {item.fund_id}</Text>
+                      <Text style={styles.itemText}>Invested: ₹{item.invested_amount.toFixed(2)}</Text>
                       <Text style={styles.itemText}>Units: {item.units.toFixed(4)}</Text>
-                      {latestNav && <Text style={styles.itemText}>Latest NAV: ₹{latestNav.toFixed(2)}</Text>}
                       <Text style={styles.itemText}>Current Value: ₹{currentValue.toFixed(2)}</Text>
                       <Text style={[styles.itemText, { color: isPositiveGain ? 'green' : 'red' }]}>
                         Gain/Loss: ₹{itemGainLoss.toFixed(2)}
@@ -235,7 +220,7 @@ export default function PortfolioScreen() {
           visible={modalVisible}
           onClose={() => { setModalVisible(false); setItemToEdit(null); }}
           onSaveItem={handleSaveItem}
-          itemToEdit={itemToEdit}
+          itemToEdit={itemToEdit as any}
         />
       </View>
     </ScrollView>

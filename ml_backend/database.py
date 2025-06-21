@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 from datetime import date
 import os
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -75,6 +76,26 @@ class DatabaseManager:
         async with self.pool.acquire() as connection:
             return await connection.fetchrow(query, fund_id)
 
+    async def get_user_profile(self, user_id: str) -> Optional[Dict]:
+        """Fetches a user's profile from the profile JSONB column."""
+        query = "SELECT profile FROM users WHERE user_id = $1"
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(query, user_id)
+            return row['profile'] if row and row['profile'] else {}
+
+    async def save_user_profile(self, user_id: str, email: str, profile_data: Dict):
+        """Saves or updates a user's profile."""
+        query = """
+            INSERT INTO users (user_id, email, profile)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE
+            SET profile = users.profile || $3,
+                email = EXCLUDED.email;
+        """
+        async with self.pool.acquire() as connection:
+            # The profile_data needs to be a JSON string
+            await connection.execute(query, user_id, email, json.dumps(profile_data))
+
     async def get_market_trends(self, limit: int = 10) -> List[Dict]:
         """Fetches market trends data"""
         query = "SELECT date, sector, score FROM market_trends ORDER BY date DESC, score DESC LIMIT $1"
@@ -122,6 +143,13 @@ class DatabaseManager:
         async with self.pool.acquire() as connection:
             return await connection.fetchrow(query, fund_id)
 
+    async def get_user_transactions(self, user_id: str) -> List[Dict]:
+        """Fetches all transactions for a user."""
+        query = "SELECT * FROM transactions WHERE user_id = $1 ORDER BY date DESC"
+        async with self.pool.acquire() as connection:
+            rows = await connection.fetch(query, user_id)
+            return [dict(row) for row in rows]
+
     # --- Data Storing Methods ---
     async def store_nav_data(self, nav_data: List[Dict]):
         """Stores a batch of NAV data into the database"""
@@ -156,4 +184,108 @@ class DatabaseManager:
         query = "SELECT DISTINCT scheme_code FROM amfi_funds"
         async with self.pool.acquire() as connection:
             rows = await connection.fetch(query)
-            return [row['scheme_code'] for row in rows] 
+            return [row['scheme_code'] for row in rows]
+
+    async def get_popular_funds(self, limit: int = 10) -> List[Dict]:
+        """Fetches the most popular funds based on the number of holders."""
+        query = """
+            SELECT fund_id, COUNT(user_id) as holder_count
+            FROM user_holdings
+            GROUP BY fund_id
+            ORDER BY holder_count DESC
+            LIMIT $1
+        """
+        async with self.pool.acquire() as connection:
+            return await connection.fetch(query, limit)
+
+    async def get_funds_by_category(self, category: str, limit: int = 10) -> List[Dict]:
+        """Fetches funds belonging to a specific category."""
+        query = """
+            SELECT scheme_code, scheme_name, fund_house, expense_ratio
+            FROM amfi_funds
+            WHERE fund_category = $1
+            ORDER BY expense_ratio ASC
+            LIMIT $2
+        """
+        async with self.pool.acquire() as connection:
+            return await connection.fetch(query, category, limit)
+
+    async def get_user_portfolio(self, user_id: str) -> List[Dict]:
+        """Fetches all portfolio items for a user."""
+        query = "SELECT id, fund_id, invested_amount, units, purchase_date FROM user_holdings WHERE user_id = $1 ORDER BY purchase_date DESC"
+        async with self.pool.acquire() as connection:
+            rows = await connection.fetch(query, user_id)
+            return [dict(row) for row in rows]
+
+    async def add_portfolio_item(self, user_id: str, item: Dict) -> int:
+        """Adds a new portfolio item and returns its id."""
+        query = """
+            INSERT INTO user_holdings (user_id, fund_id, invested_amount, units, purchase_date)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+        """
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(query, user_id, item['fund_id'], item['invested_amount'], item['units'], item.get('purchase_date'))
+            return row['id']
+
+    async def update_portfolio_item(self, user_id: str, item_id: int, item: Dict):
+        """Updates an existing portfolio item."""
+        query = """
+            UPDATE user_holdings
+            SET fund_id = $1, invested_amount = $2, units = $3, purchase_date = $4
+            WHERE id = $5 AND user_id = $6
+        """
+        async with self.pool.acquire() as connection:
+            await connection.execute(query, item['fund_id'], item['invested_amount'], item['units'], item.get('purchase_date'), item_id, user_id)
+
+    async def delete_portfolio_item(self, user_id: str, item_id: int):
+        """Deletes a portfolio item."""
+        query = "DELETE FROM user_holdings WHERE id = $1 AND user_id = $2"
+        async with self.pool.acquire() as connection:
+            await connection.execute(query, item_id, user_id)
+
+    async def get_portfolio_analytics(self, user_id: str) -> Dict:
+        """Computes analytics for a user's portfolio."""
+        # Fetch all holdings
+        holdings = await self.get_user_portfolio(user_id)
+        if not holdings:
+            return {
+                "total_invested": 0,
+                "current_value": 0,
+                "gain_loss": 0,
+                "allocation": [],
+            }
+        total_invested = 0
+        current_value = 0
+        allocation = []
+        for holding in holdings:
+            invested = float(holding['invested_amount'])
+            total_invested += invested
+            # Get latest NAV
+            nav_row = await self.get_latest_nav(holding['fund_id'])
+            nav = float(nav_row['nav_value']) if nav_row and nav_row['nav_value'] else 0
+            value = float(holding['units']) * nav
+            current_value += value
+            allocation.append({
+                "fund_id": holding['fund_id'],
+                "invested": invested,
+                "current_value": value,
+            })
+        gain_loss = current_value - total_invested
+        return {
+            "total_invested": total_invested,
+            "current_value": current_value,
+            "gain_loss": gain_loss,
+            "allocation": allocation,
+        }
+
+    async def add_transaction(self, user_id: str, tx: Dict) -> int:
+        """Adds a new transaction and returns its id."""
+        query = """
+            INSERT INTO transactions (user_id, fund_id, type, units, nav, amount, date)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        """
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(query, user_id, tx['fund_id'], tx['type'], tx['units'], tx['nav'], tx['amount'], tx.get('date'))
+            return row['id'] 

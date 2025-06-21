@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { View, Text, TextInput, Button, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
+import { useState } from 'react';
+import { ActivityIndicator, Button, Text, TextInput, View } from 'react-native';
 
 // Assuming StyledTextInput is a custom component
 import { signUp } from '@/utils/firebaseAuth';
@@ -25,11 +25,13 @@ export default function SignUpScreen() {
     setLoading(true);
     try {
       await signUp(email, password);
- } catch (error) {
+    } catch (error) {
       // Handle specific Firebase auth errors more gracefully if needed
       console.error("Sign up failed:", error);
       setError((error as Error).message);
- }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -57,8 +59,8 @@ export default function SignUpScreen() {
 
       {error && <Text style={{ color: 'red' }}>{error}</Text>}
 
-      <Link href="/(auth)/signin" className="mt-4 text-blue-500">
-        Already have an account? Sign In
+      <Link href="/(auth)/signin" className="mt-4">
+        <Text className="text-blue-500">Already have an account? Sign In</Text>
       </Link>
 
       {loading && <ActivityIndicator size="small" color="#0000ff" style={{ marginTop: 10 }} />}

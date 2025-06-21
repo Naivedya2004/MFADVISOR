@@ -9,12 +9,14 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Optional
 import json
+from pydantic import BaseModel, EmailStr, Field
 
 # Import our modules
 from database import DatabaseManager
 from models.nav_predictor import NAVPredictor
 from models.portfolio_optimizer import PortfolioOptimizer
 from models.risk_scorer import RiskScorer
+from models.recommendation_engine import RecommendationEngine
 from data_fetcher import NAVDataFetcher
 from utils.model_manager import ModelManager
 
@@ -42,6 +44,7 @@ db_manager = DatabaseManager()
 nav_predictor = NAVPredictor()
 portfolio_optimizer = PortfolioOptimizer()
 risk_scorer = RiskScorer()
+recommendation_engine = RecommendationEngine(db_manager)
 data_fetcher = NAVDataFetcher()
 model_manager = ModelManager()
 
@@ -72,6 +75,7 @@ async def health_check():
     try:
         db_status = await db_manager.check_connection()
         model_status = model_manager.get_model_status()
+        model_status['recommendation_engine'] = recommendation_engine.get_model_info()
         
         return {
             "status": "healthy",
@@ -81,6 +85,43 @@ async def health_check():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+
+# --- User Profile Endpoints ---
+
+class UserProfile(BaseModel):
+    risk_tolerance: Optional[str] = None
+    investment_horizon: Optional[int] = None
+    goals: Optional[List[str]] = None
+    email: EmailStr
+
+@app.post("/users/{user_id}/profile")
+async def create_or_update_user_profile(user_id: str, profile: UserProfile):
+    """Creates a new user profile or updates an existing one."""
+    try:
+        await db_manager.save_user_profile(
+            user_id=user_id,
+            email=profile.email,
+            profile_data=profile.dict(exclude_unset=True)
+        )
+        return {"status": "success", "user_id": user_id}
+    except Exception as e:
+        logger.error(f"Error saving profile for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save profile: {str(e)}")
+
+
+@app.get("/users/{user_id}/profile", response_model=UserProfile)
+async def get_user_profile_endpoint(user_id: str):
+    """Fetches a user's profile."""
+    try:
+        profile_data = await db_manager.get_user_profile(user_id)
+        if not profile_data:
+            raise HTTPException(status_code=404, detail="User profile not found.")
+        return profile_data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error fetching profile for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch profile.")
 
 # NAV Prediction Endpoints
 @app.post("/predict-nav")
@@ -263,6 +304,38 @@ async def get_portfolio_risk_score(user_id: str):
         logger.error(f"Error scoring portfolio risk for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Recommendation Endpoints
+@app.post("/recommendations/{user_id}")
+async def get_recommendations_endpoint(user_id: str):
+    """Generate personalized fund recommendations for a user."""
+    try:
+        # Get user profile and holdings
+        user_profile = await db_manager.get_user_profile(user_id)
+        holdings = await db_manager.get_user_holdings(user_id)
+        
+        if not user_profile:
+            raise HTTPException(status_code=404, detail="User profile not found")
+
+        # In a real app, you'd fetch relevant market data
+        # For now, we'll use an empty DataFrame as a placeholder
+        market_data = pd.DataFrame()
+
+        recommendations = await recommendation_engine.generate_recommendations(
+            user_profile=user_profile,
+            holdings=holdings,
+            market_data=market_data
+        )
+
+        return {
+            "user_id": user_id,
+            "recommendations": recommendations,
+            "model_info": recommendation_engine.get_model_info(),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error generating recommendations for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Dashboard Endpoint
 @app.get("/dashboard/{user_id}")
 async def get_dashboard(user_id: str):
@@ -328,27 +401,99 @@ async def retrain_models(background_tasks: BackgroundTasks):
 
 # Helper functions
 async def get_recommendations(user_id: str, holdings: List[Dict]) -> Dict:
-    """Generate personalized recommendations for user"""
-    try:
-        recommendations = {
-            "rebalancing": [],
-            "new_investments": [],
-            "risk_adjustments": []
-        }
-        
-        # Simple recommendation logic (can be enhanced)
-        if len(holdings) < 3:
-            recommendations["new_investments"].append({
-                "type": "diversification",
-                "message": "Consider adding more funds for better diversification",
-                "priority": "high"
-            })
-        
-        return recommendations
-        
-    except Exception as e:
-        logger.error(f"Error generating recommendations: {e}")
-        return {"error": "Failed to generate recommendations"}
+    """
+    Generate personalized fund recommendations based on user's profile,
+    risk tolerance, and market conditions.
+    
+    This is a placeholder for a more sophisticated recommendation engine.
+    """
+    # TODO: Implement recommendation logic
+    # - User profiling (risk tolerance, investment horizon)
+    # - Collaborative filtering or content-based filtering
+    # - Factor analysis (e.g., Fama-French)
+    # - Integration with market sentiment analysis
+    
+    # This function is now a proxy to the new endpoint/engine logic.
+    # For simplicity, we call the engine directly here.
+    # In a larger system, this might call the /recommendations/{user_id} endpoint
+    # or share logic with it.
+
+    user_profile = await db_manager.get_user_profile(user_id)
+    if not user_profile:
+        return {"error": "User profile not found"}
+    
+    market_data = pd.DataFrame() # Placeholder
+
+    recommendations = await recommendation_engine.generate_recommendations(
+        user_profile=user_profile,
+        holdings=holdings,
+        market_data=market_data
+    )
+
+    return {
+        "message": "Successfully generated recommendations.",
+        "suggestions": recommendations
+    }
+
+# --- Portfolio Management Endpoints ---
+
+class PortfolioItemIn(BaseModel):
+    fund_id: str
+    invested_amount: float
+    units: float
+    purchase_date: Optional[str] = None
+
+class PortfolioItemOut(PortfolioItemIn):
+    id: int
+
+@app.get("/users/{user_id}/portfolio", response_model=List[PortfolioItemOut])
+async def get_portfolio(user_id: str):
+    """Fetch all portfolio items for a user."""
+    return await db_manager.get_user_portfolio(user_id)
+
+@app.post("/users/{user_id}/portfolio", response_model=PortfolioItemOut)
+async def add_portfolio_item(user_id: str, item: PortfolioItemIn):
+    """Add a new portfolio item."""
+    item_id = await db_manager.add_portfolio_item(user_id, item.dict())
+    return {"id": item_id, **item.dict()}
+
+@app.put("/users/{user_id}/portfolio/{item_id}")
+async def update_portfolio_item(user_id: str, item_id: int, item: PortfolioItemIn):
+    """Update an existing portfolio item."""
+    await db_manager.update_portfolio_item(user_id, item_id, item.dict())
+    return {"status": "success"}
+
+@app.delete("/users/{user_id}/portfolio/{item_id}")
+async def delete_portfolio_item(user_id: str, item_id: int):
+    """Delete a portfolio item."""
+    await db_manager.delete_portfolio_item(user_id, item_id)
+    return {"status": "success"}
+
+@app.get("/users/{user_id}/analytics")
+async def get_portfolio_analytics(user_id: str):
+    """Get analytics for a user's portfolio."""
+    return await db_manager.get_portfolio_analytics(user_id)
+
+# --- Transactions Endpoints ---
+class TransactionIn(BaseModel):
+    fund_id: str
+    type: str  # 'buy' or 'sell'
+    units: float
+    nav: float
+    amount: float
+    date: datetime = Field(default_factory=datetime.utcnow)
+
+class TransactionOut(TransactionIn):
+    id: int
+
+@app.get("/users/{user_id}/transactions", response_model=List[TransactionOut])
+async def get_transactions(user_id: str):
+    return await db_manager.get_user_transactions(user_id)
+
+@app.post("/users/{user_id}/transactions", response_model=TransactionOut)
+async def add_transaction(user_id: str, tx: TransactionIn):
+    tx_id = await db_manager.add_transaction(user_id, tx.dict())
+    return {"id": tx_id, **tx.dict()}
 
 if __name__ == "__main__":
     uvicorn.run(
