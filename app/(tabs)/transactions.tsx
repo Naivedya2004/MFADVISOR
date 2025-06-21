@@ -1,4 +1,5 @@
-import { API_URL } from '@/utils/api';
+import { auth } from '@/firebaseConfig';
+import { getTransactions } from '@/utils/api';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -12,16 +13,13 @@ import {
 } from 'react-native';
 
 interface Transaction {
-  id: string;
+  id: number;
   fund_id: string;
-  transaction_type: 'BUY' | 'SELL' | 'DIVIDEND' | 'SWITCH';
+  type: 'buy' | 'sell';
   units: number;
   amount: number;
-  nav_value: number;
-  transaction_date: string;
-  notes?: string;
-  fund_name?: string;
-  category?: string;
+  nav: number;
+  date: string;
 }
 
 export default function TransactionsScreen() {
@@ -31,6 +29,7 @@ export default function TransactionsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('All');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('All');
+  const user = auth.currentUser;
 
   useEffect(() => {
     loadTransactions();
@@ -43,8 +42,8 @@ export default function TransactionsScreen() {
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/api/transactions`);
-      const data = await response.json();
+      if (!user) throw new Error('No user is logged in.');
+      const data = await getTransactions(user.uid);
       setTransactions(data);
     } catch (error) {
       console.error('Error loading transactions:', error);
@@ -56,13 +55,9 @@ export default function TransactionsScreen() {
 
   const filterTransactions = () => {
     let filtered = transactions;
-
-    // Filter by transaction type
     if (selectedType !== 'All') {
-      filtered = filtered.filter(tx => tx.transaction_type === selectedType);
+      filtered = filtered.filter(tx => tx.type === selectedType.toLowerCase());
     }
-
-    // Filter by period
     if (selectedPeriod !== 'All') {
       const now = new Date();
       const periodMap = {
@@ -71,31 +66,23 @@ export default function TransactionsScreen() {
         '6M': new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()),
         '1Y': new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()),
       };
-      
       if (periodMap[selectedPeriod as keyof typeof periodMap]) {
         const cutoffDate = periodMap[selectedPeriod as keyof typeof periodMap];
-        filtered = filtered.filter(tx => new Date(tx.transaction_date) >= cutoffDate);
+        filtered = filtered.filter(tx => new Date(tx.date) >= cutoffDate);
       }
     }
-
-    // Filter by search query
     if (searchQuery.trim()) {
-      filtered = filtered.filter(tx => 
-        tx.fund_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tx.fund_id.includes(searchQuery) ||
-        tx.notes?.toLowerCase().includes(searchQuery.toLowerCase())
+      filtered = filtered.filter(tx =>
+        tx.fund_id.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-
     setFilteredTransactions(filtered);
   };
 
   const getTransactionTypeColor = (type: string) => {
-    switch (type) {
-      case 'BUY': return '#4CAF50';
-      case 'SELL': return '#F44336';
-      case 'DIVIDEND': return '#FF9800';
-      case 'SWITCH': return '#2196F3';
+    switch (type.toLowerCase()) {
+      case 'buy': return '#4CAF50';
+      case 'sell': return '#F44336';
       default: return '#666';
     }
   };
@@ -121,22 +108,21 @@ export default function TransactionsScreen() {
       <View style={styles.transactionHeader}>
         <View style={styles.transactionInfo}>
           <Text style={styles.fundName} numberOfLines={1}>
-            {item.fund_name || item.fund_id}
+            {item.fund_id}
           </Text>
           <Text style={styles.transactionDate}>
-            {formatDate(item.transaction_date)}
+            {formatDate(item.date)}
           </Text>
         </View>
         <View style={styles.transactionTypeContainer}>
           <Text style={[
             styles.transactionType,
-            { color: getTransactionTypeColor(item.transaction_type) }
+            { color: getTransactionTypeColor(item.type) }
           ]}>
-            {item.transaction_type}
+            {item.type.toUpperCase()}
           </Text>
         </View>
       </View>
-      
       <View style={styles.transactionDetails}>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Units:</Text>
@@ -144,7 +130,7 @@ export default function TransactionsScreen() {
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>NAV:</Text>
-          <Text style={styles.detailValue}>₹{item.nav_value.toFixed(2)}</Text>
+          <Text style={styles.detailValue}>₹{item.nav.toFixed(2)}</Text>
         </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Amount:</Text>
@@ -152,33 +138,19 @@ export default function TransactionsScreen() {
             {formatAmount(item.amount)}
           </Text>
         </View>
-        {item.category && (
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Category:</Text>
-            <Text style={styles.detailValue}>{item.category}</Text>
-          </View>
-        )}
       </View>
-      
-      {item.notes && (
-        <View style={styles.notesContainer}>
-          <Text style={styles.notesText}>{item.notes}</Text>
-        </View>
-      )}
     </TouchableOpacity>
   );
 
   const showTransactionDetails = (transaction: Transaction) => {
     Alert.alert(
       'Transaction Details',
-      `Fund: ${transaction.fund_name || transaction.fund_id}\n` +
-      `Type: ${transaction.transaction_type}\n` +
-      `Date: ${formatDate(transaction.transaction_date)}\n` +
+      `Fund: ${transaction.fund_id}\n` +
+      `Type: ${transaction.type.toUpperCase()}\n` +
+      `Date: ${formatDate(transaction.date)}\n` +
       `Units: ${transaction.units.toFixed(4)}\n` +
-      `NAV: ₹${transaction.nav_value.toFixed(2)}\n` +
-      `Amount: ${formatAmount(transaction.amount)}\n` +
-      `Category: ${transaction.category || 'N/A'}\n` +
-      `Notes: ${transaction.notes || 'N/A'}`,
+      `NAV: ₹${transaction.nav.toFixed(2)}\n` +
+      `Amount: ${formatAmount(transaction.amount)}`,
       [{ text: 'OK' }]
     );
   };
@@ -204,21 +176,14 @@ export default function TransactionsScreen() {
     const summary = {
       totalBuy: 0,
       totalSell: 0,
-      totalDividend: 0,
       totalTransactions: filteredTransactions.length,
     };
 
     filteredTransactions.forEach(tx => {
-      switch (tx.transaction_type) {
-        case 'BUY':
-          summary.totalBuy += tx.amount;
-          break;
-        case 'SELL':
-          summary.totalSell += tx.amount;
-          break;
-        case 'DIVIDEND':
-          summary.totalDividend += tx.amount;
-          break;
+      if (tx.type === 'buy') {
+        summary.totalBuy += tx.amount;
+      } else if (tx.type === 'sell') {
+        summary.totalSell += tx.amount;
       }
     });
 
@@ -244,7 +209,7 @@ export default function TransactionsScreen() {
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search transactions..."
+          placeholder="Search by fund code..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholderTextColor="#999"
@@ -257,9 +222,8 @@ export default function TransactionsScreen() {
           <Text style={styles.filterTitle}>Type</Text>
           <View style={styles.filterButtons}>
             {renderFilterButton('All', 'All', selectedType, setSelectedType)}
-            {renderFilterButton('Buy', 'BUY', selectedType, setSelectedType)}
-            {renderFilterButton('Sell', 'SELL', selectedType, setSelectedType)}
-            {renderFilterButton('Dividend', 'DIVIDEND', selectedType, setSelectedType)}
+            {renderFilterButton('Buy', 'buy', selectedType, setSelectedType)}
+            {renderFilterButton('Sell', 'sell', selectedType, setSelectedType)}
           </View>
         </View>
 
@@ -293,27 +257,14 @@ export default function TransactionsScreen() {
             {formatAmount(summary.totalSell)}
           </Text>
         </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Total Dividend:</Text>
-          <Text style={[styles.summaryValue, { color: '#FF9800' }]}>
-            {formatAmount(summary.totalDividend)}
-          </Text>
-        </View>
       </View>
 
       {/* Transactions List */}
       <FlatList
         data={filteredTransactions}
+        keyExtractor={item => item.id.toString()}
         renderItem={renderTransactionItem}
-        keyExtractor={(item) => item.id}
-        style={styles.transactionsList}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No transactions found</Text>
-            <Text style={styles.emptySubtext}>Try adjusting your filters or search</Text>
-          </View>
-        }
+        ListEmptyComponent={<Text style={styles.emptyText}>No transactions found.</Text>}
       />
     </View>
   );
@@ -412,9 +363,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-  transactionsList: {
-    flex: 1,
-  },
   transactionItem: {
     backgroundColor: '#fff',
     padding: 16,
@@ -474,30 +422,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  notesContainer: {
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 8,
-  },
-  notesText: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
   emptyText: {
     fontSize: 18,
     color: '#666',
     marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
   },
 }); 

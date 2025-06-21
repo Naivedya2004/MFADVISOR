@@ -16,25 +16,37 @@ class RiskScorer:
             "description": "Scores risk based on volatility and fund category."
         }
 
-    async def score_fund(self, fund_data: Dict, nav_data: List[Dict]) -> Dict:
+    async def score_fund(self, fund_data: Dict, nav_data: List[Dict], benchmark_nav_data: List[Dict] = None) -> Dict:
         """
         Assigns a risk score to a single fund.
         
-        :param fund_data: Metadata for the fund (e.g., category).
+        :param fund_data: Metadata for the fund (e.g., category, expense_ratio).
         :param nav_data: Historical NAV data for the fund.
+        :param benchmark_nav_data: Historical NAV data for a benchmark index (optional, for beta).
         """
         try:
             # Calculate volatility
             volatility = self._calculate_volatility(nav_data)
-            
+            # Calculate max drawdown
+            max_drawdown = self._calculate_max_drawdown(nav_data)
+            # Calculate Sharpe ratio
+            sharpe = self._calculate_sharpe(nav_data)
+            # Calculate beta (if benchmark provided)
+            beta = self._calculate_beta(nav_data, benchmark_nav_data) if benchmark_nav_data else None
+            # Use expense ratio if available
+            expense_ratio = float(fund_data.get('expense_ratio', 0))
             # Get category risk
             category = fund_data.get('category', 'Unknown')
             category_risk = self._get_category_risk(category)
-            
-            # Combine scores (simple weighted average)
-            # Adjust weights as needed
-            risk_score = (volatility * 0.7) + (category_risk * 0.3)
-            
+            # Combine scores (weighted sum)
+            # You can tune these weights as needed
+            risk_score = (
+                0.4 * volatility +
+                0.2 * max_drawdown +
+                0.15 * (expense_ratio / 2) +  # normalize expense ratio (assume max 2%)
+                0.15 * (abs(beta) if beta is not None else 0.5) +
+                0.1 * category_risk
+            )
             # Normalize to 1-10 scale
             risk_score = np.clip(risk_score, 0, 1) * 9 + 1
             risk_label = self._get_risk_label(risk_score)
@@ -44,6 +56,10 @@ class RiskScorer:
                 "label": risk_label,
                 "components": {
                     "annualized_volatility": round(volatility * 100, 2),
+                    "max_drawdown": round(max_drawdown * 100, 2),
+                    "sharpe_ratio": round(sharpe, 2),
+                    "beta": round(beta, 2) if beta is not None else None,
+                    "expense_ratio": expense_ratio,
                     "category": category,
                     "category_risk_score": category_risk
                 }
@@ -88,6 +104,46 @@ class RiskScorer:
         # Annualized volatility
         annualized_volatility = df['returns'].std() * np.sqrt(252) # 252 trading days
         return annualized_volatility
+
+    def _calculate_max_drawdown(self, nav_data: List[Dict]) -> float:
+        if len(nav_data) < 2:
+            return 0.0
+        df = pd.DataFrame(nav_data)
+        navs = df['nav_value'].values
+        running_max = np.maximum.accumulate(navs)
+        drawdowns = (navs - running_max) / running_max
+        max_drawdown = drawdowns.min() if len(drawdowns) > 0 else 0.0
+        return abs(max_drawdown)
+
+    def _calculate_sharpe(self, nav_data: List[Dict], risk_free_rate: float = 0.05) -> float:
+        if len(nav_data) < 2:
+            return 0.0
+        df = pd.DataFrame(nav_data)
+        df['returns'] = df['nav_value'].pct_change()
+        excess_returns = df['returns'] - (risk_free_rate / 252)
+        mean_excess = excess_returns.mean()
+        std_excess = excess_returns.std()
+        if std_excess == 0:
+            return 0.0
+        sharpe = (mean_excess / std_excess) * np.sqrt(252)
+        return sharpe
+
+    def _calculate_beta(self, nav_data: List[Dict], benchmark_nav_data: List[Dict]) -> float:
+        if not benchmark_nav_data or len(nav_data) < 2 or len(benchmark_nav_data) < 2:
+            return 0.0
+        df = pd.DataFrame(nav_data)
+        df_bench = pd.DataFrame(benchmark_nav_data)
+        df['returns'] = df['nav_value'].pct_change()
+        df_bench['returns'] = df_bench['nav_value'].pct_change()
+        min_len = min(len(df['returns']), len(df_bench['returns']))
+        if min_len < 2:
+            return 0.0
+        cov = np.cov(df['returns'][-min_len:], df_bench['returns'][-min_len:])[0][1]
+        var = np.var(df_bench['returns'][-min_len:])
+        if var == 0:
+            return 0.0
+        beta = cov / var
+        return beta
 
     def _get_category_risk(self, category: str) -> float:
         """Assigns a risk score based on fund category (0=low, 1=high)"""

@@ -54,13 +54,19 @@ export const deletePortfolioItem = async (userId: string, itemId: number): Promi
 };
 
 // --- Recommendations ---
-export const getRecommendations = async (userId: string): Promise<any> => {
+export const getRecommendations = async (userId: string): Promise<any[]> => {
   const response = await pyApi.post(`/recommendations/${userId}`);
-  return response.data;
-}
+  return response.data.recommendations || [];
+};
 
 // --- Analytics ---
 export const getPortfolioAnalytics = async (userId: string): Promise<any> => {
   const response = await pyApi.get(`/users/${userId}/analytics`);
   return response.data;
-}; 
+};
+
+// --- Explore ---
+export const getPopularFunds = async (limit: number = 20): Promise<any[]> => {
+  const response = await pyApi.get(`/funds/popular?limit=${limit}`);
+  return response.data;
+};

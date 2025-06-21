@@ -1,82 +1,66 @@
-import { API_URL } from '@/utils/api';
+import { auth } from '@/firebaseConfig';
+import { getPopularFunds, getRecommendations } from '@/utils/api';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface Fund {
-  scheme_code: string;
-  scheme_name: string;
-  category: string;
-  nav_value: number;
-  nav_date: string;
+  fund_id: string;
+  fund_house?: string;
+  fund_category?: string;
+  scheme_name?: string;
+  expense_ratio?: number;
+  nav?: number;
+  [key: string]: any;
 }
 
+const TABS = ['Popular', 'Recommended'] as const;
+
+type TabType = typeof TABS[number];
+
 export default function ExploreScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [funds, setFunds] = useState<Fund[]>([]);
-  const [filteredFunds, setFilteredFunds] = useState<Fund[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>('Popular');
+  const [popularFunds, setPopularFunds] = useState<Fund[]>([]);
+  const [recommendedFunds, setRecommendedFunds] = useState<Fund[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [categories, setCategories] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const user = auth.currentUser;
 
   useEffect(() => {
-    loadFunds();
-  }, []);
+    fetchFunds();
+  }, [activeTab, user]);
 
-  useEffect(() => {
-    filterFunds();
-  }, [searchQuery, selectedCategory, funds]);
-
-  const loadFunds = async () => {
+  const fetchFunds = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      const response = await fetch(`${API_URL}/api/funds`);
-      const data = await response.json();
-      setFunds(data);
-      
-      // Extract unique categories
-      const uniqueCategories = [...new Set(data.map((fund: Fund) => fund.category))].sort() as string[];
-      setCategories(['All', ...uniqueCategories]);
-    } catch (error) {
-      console.error('Error loading funds:', error);
-      Alert.alert('Error', 'Failed to load funds');
+      if (activeTab === 'Popular') {
+        const data = await getPopularFunds();
+        setPopularFunds(data);
+      } else if (activeTab === 'Recommended') {
+        if (!user) throw new Error('No user is logged in.');
+        const data = await getRecommendations(user.uid);
+        setRecommendedFunds(data);
+      }
+    } catch (e: any) {
+      setError('Failed to load funds.');
+      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterFunds = () => {
-    let filtered = funds;
-
-    // Filter by category
-    if (selectedCategory !== 'All') {
-      filtered = filtered.filter(fund => fund.category === selectedCategory);
-    }
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(fund => 
-        fund.scheme_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        fund.scheme_code.includes(searchQuery)
-      );
-    }
-
-    setFilteredFunds(filtered);
-  };
-
   const handleFundPress = (fund: Fund) => {
     Alert.alert(
-      fund.scheme_name,
-      `Category: ${fund.category}\nNAV: ₹${fund.nav_value?.toFixed(2) || 'N/A'}\nDate: ${fund.nav_date || 'N/A'}`,
+      fund.scheme_name || fund.fund_id,
+      `Category: ${fund.fund_category || 'N/A'}\nNAV: ₹${fund.nav?.toFixed(2) || 'N/A'}`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Add to Portfolio', onPress: () => addToPortfolio(fund) }
@@ -85,227 +69,81 @@ export default function ExploreScreen() {
   };
 
   const addToPortfolio = (fund: Fund) => {
-    // Navigate to portfolio with pre-filled fund data
-    // This would typically use navigation.navigate with params
-    Alert.alert('Success', `${fund.scheme_name} selected for portfolio addition`);
+    // Placeholder: In a real app, navigate to portfolio add modal
+    Alert.alert('Success', `${fund.scheme_name || fund.fund_id} selected for portfolio addition`);
   };
 
   const renderFundItem = ({ item }: { item: Fund }) => (
     <TouchableOpacity style={styles.fundItem} onPress={() => handleFundPress(item)}>
       <View style={styles.fundHeader}>
-        <Text style={styles.fundName} numberOfLines={2}>{item.scheme_name}</Text>
-        <Text style={styles.fundCode}>{item.scheme_code}</Text>
+        <Text style={styles.fundName} numberOfLines={2}>{item.scheme_name || item.fund_id}</Text>
+        <Text style={styles.fundCode}>{item.fund_id}</Text>
       </View>
       <View style={styles.fundDetails}>
-        <Text style={styles.category}>{item.category}</Text>
-        <Text style={styles.nav}>₹{item.nav_value?.toFixed(2) || 'N/A'}</Text>
+        <Text style={styles.category}>{item.fund_category || 'N/A'}</Text>
+        <Text style={styles.nav}>₹{item.nav?.toFixed(2) || 'N/A'}</Text>
       </View>
     </TouchableOpacity>
   );
-
-  const renderCategoryButton = (category: string) => (
-    <TouchableOpacity
-      key={category}
-      style={[
-        styles.categoryButton,
-        selectedCategory === category && styles.selectedCategoryButton
-      ]}
-      onPress={() => setSelectedCategory(category)}
-    >
-      <Text style={[
-        styles.categoryButtonText,
-        selectedCategory === category && styles.selectedCategoryButtonText
-      ]}>
-        {category}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading funds...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Fund Search & Explore</Text>
-      
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search funds by name or code..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
+      <Text style={styles.title}>Explore Funds</Text>
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        {TABS.map(tab => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text style={[styles.tabButtonText, activeTab === tab && styles.activeTabButtonText]}>{tab}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {/* Fund List */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Loading funds...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={activeTab === 'Popular' ? popularFunds : recommendedFunds}
+          renderItem={renderFundItem}
+          keyExtractor={item => item.fund_id}
+          style={styles.fundsList}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<Text style={styles.emptyText}>No funds found.</Text>}
         />
-      </View>
-
-      {/* Category Filter */}
-      <View style={styles.categoryContainer}>
-        <Text style={styles.sectionTitle}>Categories</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-          {categories.map(renderCategoryButton)}
-        </ScrollView>
-      </View>
-
-      {/* Results Summary */}
-      <View style={styles.resultsSummary}>
-        <Text style={styles.resultsText}>
-          {filteredFunds.length} funds found
-        </Text>
-      </View>
-
-      {/* Funds List */}
-      <FlatList
-        data={filteredFunds}
-        renderItem={renderFundItem}
-        keyExtractor={(item) => item.scheme_code}
-        style={styles.fundsList}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No funds found</Text>
-            <Text style={styles.emptySubtext}>Try adjusting your search or category filter</Text>
-          </View>
-        }
-      />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
-  },
-  searchContainer: {
-    marginBottom: 20,
-  },
-  searchInput: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  categoryContainer: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  categoryScroll: {
-    flexDirection: 'row',
-  },
-  categoryButton: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  selectedCategoryButton: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  categoryButtonText: {
-    color: '#333',
-    fontSize: 14,
-  },
-  selectedCategoryButtonText: {
-    color: '#fff',
-  },
-  resultsSummary: {
-    marginBottom: 15,
-  },
-  resultsText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  fundsList: {
-    flex: 1,
-  },
-  fundItem: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  fundHeader: {
-    marginBottom: 8,
-  },
-  fundName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  fundCode: {
-    fontSize: 12,
-    color: '#666',
-  },
-  fundDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  category: {
-    fontSize: 14,
-    color: '#007AFF',
-    backgroundColor: '#f0f8ff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  nav: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5', padding: 16 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  tabsContainer: { flexDirection: 'row', marginBottom: 16, justifyContent: 'center' },
+  tabButton: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: '#fff', marginHorizontal: 8, borderWidth: 1, borderColor: '#ddd' },
+  activeTabButton: { backgroundColor: '#007AFF', borderColor: '#007AFF' },
+  tabButtonText: { color: '#333', fontSize: 16 },
+  activeTabButtonText: { color: '#fff', fontWeight: 'bold' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { color: '#F44336', fontSize: 16 },
+  fundsList: { flex: 1 },
+  emptyText: { textAlign: 'center', color: '#888', marginTop: 32, fontSize: 16 },
+  fundItem: { backgroundColor: '#fff', borderRadius: 8, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
+  fundHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  fundName: { fontSize: 16, fontWeight: 'bold', color: '#333', flex: 1 },
+  fundCode: { fontSize: 14, color: '#888', marginLeft: 8 },
+  fundDetails: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  category: { fontSize: 14, color: '#888' },
+  nav: { fontSize: 14, fontWeight: 'bold', color: '#007AFF' },
 });

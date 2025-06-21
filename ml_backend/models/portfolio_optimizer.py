@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from pypfopt import EfficientFrontier, risk_models, expected_returns
+from pypfopt import EfficientFrontier, risk_models, expected_returns, objective_functions
 import logging
 from typing import List, Dict
 import asyncio
@@ -22,7 +22,9 @@ class PortfolioOptimizer:
         holdings: List[Dict], 
         historical_data: Dict[str, List[Dict]],
         optimization_type: str = "max_sharpe",
-        risk_tolerance: float = 0.5
+        risk_tolerance: float = 0.5,
+        min_allocation: float = 0.0,
+        max_allocation: float = 1.0
     ) -> Dict:
         """
         Optimizes portfolio allocation based on historical returns and risk.
@@ -31,6 +33,8 @@ class PortfolioOptimizer:
         :param historical_data: Dict of historical NAV data for each fund.
         :param optimization_type: 'max_sharpe', 'min_risk', or 'efficient_risk'.
         :param risk_tolerance: Target volatility for 'efficient_risk' optimization.
+        :param min_allocation: Minimum allocation per fund (fraction, e.g. 0.05 for 5%)
+        :param max_allocation: Maximum allocation per fund (fraction, e.g. 0.5 for 50%)
         """
         try:
             # Prepare price data DataFrame
@@ -39,12 +43,16 @@ class PortfolioOptimizer:
             if price_df.shape[0] < 2 or price_df.shape[1] < 1:
                 raise ValueError("Insufficient data for optimization (need at least 2 days and 1 fund).")
 
-            # Calculate expected returns and sample covariance
+            # Calculate expected returns and Ledoit-Wolf shrinkage covariance
             mu = expected_returns.mean_historical_return(price_df)
-            S = risk_models.sample_cov(price_df)
+            S = risk_models.CovarianceShrinkage(price_df).ledoit_wolf()
 
             # Initialize EfficientFrontier
             ef = EfficientFrontier(mu, S)
+
+            # Add min/max allocation constraints
+            ef.add_constraint(lambda w: w >= min_allocation)
+            ef.add_constraint(lambda w: w <= max_allocation)
 
             # Perform optimization
             if optimization_type == "max_sharpe":

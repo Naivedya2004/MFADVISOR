@@ -495,6 +495,12 @@ async def add_transaction(user_id: str, tx: TransactionIn):
     tx_id = await db_manager.add_transaction(user_id, tx.dict())
     return {"id": tx_id, **tx.dict()}
 
+@app.get("/funds/popular")
+async def get_popular_funds(limit: int = 20):
+    """Get the most popular funds based on user holdings."""
+    popular = await db_manager.get_popular_funds(limit=limit)
+    return popular
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
