@@ -1,5 +1,5 @@
-import usePortfolio from '@/app/(app)/(tabs)/hooks/usePortfolio';
 import ManagePortfolioItemModal from '@/components/ManagePortfolioItemModal';
+import usePortfolio from '@/hooks/usePortfolio';
 import { PortfolioItem } from '@/types';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Button, Dimensions, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';

@@ -21,6 +21,14 @@ def create_tables():
         conn = psycopg2.connect(**DB_PARAMS)
         cursor = conn.cursor()
         
+        print("--- Ensuring a clean database state ---")
+        cursor.execute("DROP TABLE IF EXISTS transactions CASCADE;")
+        cursor.execute("DROP TABLE IF EXISTS user_profiles CASCADE;")
+        cursor.execute("DROP TABLE IF EXISTS portfolio_items CASCADE;")
+        cursor.execute("DROP TABLE IF EXISTS fund_nav_history CASCADE;")
+        cursor.execute("DROP TABLE IF EXISTS amfi_funds CASCADE;")
+        print("✅ Dropped existing tables successfully.")
+        
         # Create AMFI funds table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS amfi_funds (
