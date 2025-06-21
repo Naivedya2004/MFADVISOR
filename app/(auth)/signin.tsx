@@ -1,7 +1,7 @@
-import { Text, View, TextInput, Button, Alert, ActivityIndicator } from 'react-native';
-import React, { useState, Fragment } from 'react';
 import { signIn } from '@/utils/firebaseAuth';
 import { Link, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { ActivityIndicator, Button, Text, TextInput, View } from 'react-native';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -36,8 +36,6 @@ export default function SignInScreen() {
       } else {
         setError('An unknown error occurred.'); // Generic error message
       }
-    } finally {
- // Alert.alert('Sign In Error', error.message); // We will display error in a Text component instead
     }
   };
 
