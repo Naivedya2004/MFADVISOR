@@ -1,0 +1,18 @@
+# FastAPI and Server
+fastapi
+uvicorn[standard]
+python-dotenv
+asyncpg
+
+# ML Models
+prophet
+PyPortfolioOpt
+scikit-learn
+pandas
+numpy
+
+# Data Fetching
+httpx
+
+# Model Management
+joblib 

@@ -3,10 +3,11 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import 'react-native-url-polyfill/auto';
 
-import { useEffect, useState } from 'react';
-import { onAuthStateChanged, User  } from 'firebase/auth';
 import { auth } from '@/firebaseConfig'; // Assuming you export 'auth' from this file
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { useEffect, useState } from 'react';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 
